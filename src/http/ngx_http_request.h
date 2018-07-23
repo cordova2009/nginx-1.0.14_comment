@@ -265,7 +265,7 @@ typedef struct {
     u_char                           *content_type_lowcase;
     ngx_uint_t                        content_type_hash;
 
-    ngx_array_t                       cache_control;  
+    ngx_array_t                       cache_control;
 
     //这里指定过content_length_n后，不用再到ngx_table_elt_t中设置了
     off_t                             content_length_n; //响应数据长度
@@ -387,7 +387,7 @@ struct ngx_http_request_s {
     // 这个请求对应的客户端连接
     ngx_connection_t                 *connection;  //当前request的连接
 
-    // 指向存放所有HTTP模块的上下文结构体的指针数组
+    // 指向存放所有HTTP模块的上下文结构体的指针数组，用户可以将私有数据保存在这里
     void                            **ctx;  //上下文
 
     // 指向请求对应的存放main级别配置结构体的指针数组
@@ -404,6 +404,7 @@ struct ngx_http_request_s {
     但如果该方法无法一次处理完该请求的全部业务，在归还控制权到epoll事件模块后，该请求再次被回调时，将通过ngx_http_request_handler方法来处理，
     而这个方法中对于可读事件的处理就是调用read_event_handler处理请求。也就是说，HTTP模块希望在底层处理请求的读事件，重新实现read_evet_handler方法。
     */
+    /*nginx使用的是reqctor模式，这里包含的xxx_event_handler实际上就是注册到对应时间的handler*/
     ngx_http_event_handler_pt         read_event_handler;
 
     /*
@@ -481,8 +482,14 @@ struct ngx_http_request_s {
     ngx_http_request_t               *parent;
 
     // 与subrequest子请求相关的功能。
+    /*用于将多个子请求链接成链表，并且序列化子请求，而非使用一般的异步调用方式乱序处理*/
     ngx_http_postponed_request_t     *postponed;
-    ngx_http_post_subrequest_t       *post_subrequest;
+    /*
+    当父请求结束之后，会检查post_subrequest，如果子请求存在就会调用子请求的write_handler进行
+    处理，而后根据子请求的URI去匹配nginx.conf中合适的location,选择合适的模块进行请求的处理，
+    在子请求结束时，就会调用子请求的Handler。
+    */
+    ngx_http_post_subrequest_t       *post_subrequest;/*指向该请求的子请求*/
 
     /*
     所有自请求都是通过posted_requests这个单链表来链接起来的，执行post子请求时调用的ngx_http_run_posted_requests
@@ -507,7 +514,7 @@ struct ngx_http_request_s {
     /*
     在NGX_HTTP_ACCESS_PHASE阶段需要判断请求是否具有访问权限时，通过access_code来传递HTTP模块的handler回调方法的返回值，
     如果access_code为0，则表示请求具备访问权限，反之则说明请求不具备访问权限
-    */ 
+    */
     ngx_uint_t                        access_code;
 
     ngx_http_variable_value_t        *variables;
